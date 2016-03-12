@@ -5,15 +5,20 @@ QUIT_COMMAND = 'quit'
 
 #Game Classes
 class Player
-  attr_reader :mark
-  def initialize(mark)
+  attr_reader :mark, :name
+  def initialize(mark, name)
     @mark = mark
+    @name = name
   end
 end
 
 class Board
+  WIDTH = 3
+  HEIGHT = 3
+  N_SPACES = 4
   MAGIC_NUMBER = 15
   MAGIC_VALUES = [[8,1,6],[3,5,7],[4,9,2]] #Magic Square values for 3x3
+  EXAMPLE_VALUES = [['1','2','3'],['4','5','6'],['7','8','9']]
   EMPTY_CELL_MARK = ''
 
   def initialize
@@ -22,11 +27,11 @@ class Board
 
   private
   def reset_board
-    @board = Array.new(3) { Array.new(3) { EMPTY_CELL_MARK }
+    @board = Array.new(HEIGHT) { Array.new(WIDTH) { EMPTY_CELL_MARK }}
   end
 
   def translate_position(pos)
-    [(pos-1)%3,(pos-1)/3]
+    [(pos-1)/WIDTH,(pos-1)%HEIGHT]
   end
 
   def cell_empty?(x, y)
@@ -35,7 +40,6 @@ class Board
 
   def get_magic_values(player_mark)
     values = []
-
     @board.each_index do |x|
       @board[x].each_index do |y|
         values << MAGIC_VALUES[x][y] unless @board[x][y] != player_mark
@@ -45,20 +49,30 @@ class Board
     values
   end
 
-  def player_wins?(values, limit = MAGIC_NUMBER, idx=0)
-     if idx >= values.length
-        if limit == 0
-            return true
+  def player_wins?(values, limit = MAGIC_NUMBER)
+    values.sort!
+    values.each_index do |i|
+      asc_ptr = i+1
+      desc_ptr = values.length-1
+      while asc_ptr < desc_ptr
+        tmp = values[asc_ptr] + values[desc_ptr] + values[i]
+        if tmp > limit
+          desc_ptr-=1
+        elsif tmp < limit
+          asc_ptr+=1
         else
-            return false
+          return true
         end
+       end 
     end
+    return false
+  end
 
-    if !player_wins?(values, limit, idx + 1)
-        player_wins?(values, limit - values[idx], idx + 1)
-    else
-        return true
+  def draw_divisor
+    ((((N_SPACES*2)+2)*3)-1).times do
+      print '-'
     end
+    puts
   end
 
   public
@@ -75,18 +89,41 @@ class Board
 
   def verify_win(player_mark)
     player_values = get_magic_values(player_mark)
-    return false unless player_values.lenght >= 3 #needs at least three plays
+    return false unless player_values.length >= 3 #needs at least three plays
     player_wins?(player_values)
   end
 
-  def verify_draw
-    @board.flatten.map { |cell| cell} != EMPTY_CELL_MARK
+  def verify_draw(curr_player_mark, other_player_mark)
+    (not @board.flatten.include? EMPTY_CELL_MARK) && (not verify_win(curr_player_mark)) && (not verify_win(other_player_mark))
+  end
+
+  def draw_board(example=false)
+    values = @board
+    values = EXAMPLE_VALUES unless not example
+
+    values.each_with_index do |row, i|
+      draw_divisor unless i==0
+      row.each_with_index do |element, j|
+        element = ' ' if element == ''
+
+        if j != row.length-1
+          printf "%#{N_SPACES+1}s %#{N_SPACES}s", element, '|'
+        else
+          printf "%#{N_SPACES+1}s\n", element
+        end
+      end
+    end
+    puts
   end
 end
 
 #Auxiliar Methods...
 def valid_marks?(mark1, mark2)
   ((not mark1.empty?) && (not mark2.empty?)) || (mark1.downcase == QUIT_COMMAND && mark2.downcase == QUIT_COMMAND)
+end
+
+def valid_position?(position)
+  (position.to_i.to_s == position) && position.to_i.between?(1, 9)
 end
 
 def check_exit(command)
@@ -121,8 +158,46 @@ if __FILE__ == $0
   puts
   puts 'Let\'s play!!!'
 
-  player1 = Player.new(player1_mark)
-  player2 = Player.new(player2_mark)
+  player1 = Player.new(player1_mark, "Player 1")
+  player2 = Player.new(player2_mark, "Player 2")
+  players = {player1: player1, player2: player2}
   board = Board.new
-  
+
+  puts 'Tip: When you make a play choose the board position by picking one number as presented in:'
+  board.draw_board(true)
+  random_picked_player = players.keys.sample 
+
+  current_player = players[random_picked_player]
+  other_player = random_picked_player == :player1 ? players[:player2] : players[:player1]
+
+  while true
+
+    valid_play = false
+    begin
+      puts current_player.name + ' turn:'
+      position = gets.chomp.tr(" \t\n", '')
+      puts
+
+      if not valid_position?(position)
+        puts 'As to be a valid number (1-9)...'
+        next
+      end
+
+      valid_play = board.make_play(current_player.mark, position.to_i)
+    end until valid_play
+
+
+    board.draw_board
+
+    if board.verify_win(current_player.mark)
+      puts current_player.name + " Wins!!!"
+      puts other_player.name + ", sorry mate..."
+      check_exit(QUIT_COMMAND)
+    elsif board.verify_draw(current_player.mark, other_player.mark)
+      puts 'Dudes... you both suck...'
+      check_exit(QUIT_COMMAND)
+    end
+
+    current_player, other_player = other_player, current_player
+  end
 end
