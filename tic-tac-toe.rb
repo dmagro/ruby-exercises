@@ -2,13 +2,14 @@
 #Win condition based on the Magic Square method described here:
 #http://mathworld.wolfram.com/MagicSquare.html
 QUIT_COMMAND = 'quit'
+QUIT_MSG = 'Bye bye...'
 
 #Game Classes
 class Player
-  attr_reader :mark, :name
-  def initialize(mark, name)
-    @mark = mark
+  attr_reader :name, :mark
+  def initialize(name, mark)
     @name = name
+    @mark = mark
   end
 end
 
@@ -117,87 +118,143 @@ class Board
   end
 end
 
-#Auxiliar Methods...
-def valid_marks?(mark1, mark2)
-  ((not mark1.empty?) && (not mark2.empty?)) || (mark1.downcase == QUIT_COMMAND && mark2.downcase == QUIT_COMMAND)
-end
+class TicTacToe
+  PLAYER1 = :player1
+  PLAYER2 = :player2
+  MIN_VALID_POS = 1
+  MAX_VALID_POS = 9
+  OUTPUT_MSGS = { 
+    player1_mark_request: "Insert Player 1 mark",
+    player2_mark_request: "Insert Player 2 mark",
+    mark_validation1: "\n Choose just one characters and different characters for each player...",
+    mark_validation2: "Or, you know, just quit...\n",
+    init_play_greet: "\nLet\'s play!!!",
+    how_to_play_tip: "Tip: When you make a play choose the board position by picking one number as presented in:",
+    player_turn: " turn:",
+    invalid_position: "As to be a valid number (1-9)...",
+    win_msg: " Wins!!!",
+    lose_msg: ", sorry mate...",
+    draw_msg: "Dudes... you both suck..."
+  }
 
-def valid_position?(position)
-  (position.to_i.to_s == position) && position.to_i.between?(1, 9)
-end
+  attr_reader :board, :players, :current_player, :other_player
 
-def check_exit(command)
-  if command.downcase == QUIT_COMMAND
-    puts 'Bye bye...'
-    Process.exit
+  def initialize()
+    @board = Board.new
+    @players = Hash.new
   end
-end
 
-if __FILE__ == $0
-    
-  begin
-    puts 'Insert Player 1 mark'
-    player1_mark = gets.chomp.tr(" \t\n", '')
-    check_exit(player1_mark)
+  public
+  def setup_game()
+    player1_mark, player2_mark = get_players_settings()
+    create_player("Player1", player1_mark)
+    create_player("Player2", player2_mark)
+    choose_who_starts()
+  end
 
-    puts 'Insert Player 2 mark'
-    player2_mark = gets.chomp.tr(" \t\n", '')
-    check_exit(player2_mark)
+  def play_game()
+    start_greetings()
+    while true
+      valid_play = false
+      begin
+        position = get_position()
+        puts
+        if not valid_position?(position)
+          puts OUTPUT_MSGS[invalid_position]
+          next
+        end
+        valid_play = @board.make_play(@current_player.mark, position.to_i)
+      end until valid_play
 
-    valid_marks = valid_marks?(player1_mark, player2_mark)
-
-    if not valid_marks
-      puts
-      puts 'Choose just one characters and different characters for each player...'
-      puts 'Or, you know, just quit...'
-      puts
+      @board.draw_board()
+      verify_win()
+      verify_draw()
+      @current_player, @other_player = @other_player, @current_player
     end
- 
-  end until valid_marks
+  end
 
-  puts
-  puts 'Let\'s play!!!'
+  private
+  #Private Auxiliar Methods...
+  def validate_marks(mark1, mark2)
+    ((not mark1.empty?) && (not mark2.empty?)) || (mark1.downcase == QUIT_COMMAND && mark2.downcase == QUIT_COMMAND)
+  end
 
-  player1 = Player.new(player1_mark, "Player 1")
-  player2 = Player.new(player2_mark, "Player 2")
-  players = {player1: player1, player2: player2}
-  board = Board.new
+  def valid_position?(position)
+    (position.to_i.to_s == position) && position.to_i.between?(MIN_VALID_POS, MAX_VALID_POS)
+  end
 
-  puts 'Tip: When you make a play choose the board position by picking one number as presented in:'
-  board.draw_board(true)
-  random_picked_player = players.keys.sample 
+  def check_exit(command)
+    if command.downcase == QUIT_COMMAND
+      puts QUIT_MSG
+      Process.exit
+    end
+  end
 
-  current_player = players[random_picked_player]
-  other_player = random_picked_player == :player1 ? players[:player2] : players[:player1]
+  def get_mark(is_player1=false)
+    msg = is_player1 ? :player1_mark_request : :player2_mark_request
+    puts OUTPUT_MSGS[msg]
+    player_mark = gets.chomp.tr(" \t\n", '')
+    check_exit(player_mark)
+    player_mark
+  end
 
-  while true
-
-    valid_play = false
+  #Private Game actions
+  def get_players_settings()
     begin
-      puts current_player.name + ' turn:'
-      position = gets.chomp.tr(" \t\n", '')
-      puts
+      player1_mark = get_mark(true)
+      player2_mark = get_mark()
+      valid_marks = validate_marks(player1_mark, player2_mark)
 
-      if not valid_position?(position)
-        puts 'As to be a valid number (1-9)...'
-        next
+      if not valid_marks
+        puts OUTPUT_MSGS[mark_validation1]
+        puts OUTPUT_MSGS[mark_validation2]
       end
+    end until valid_marks
+    [player1_mark, player2_mark]
+  end
 
-      valid_play = board.make_play(current_player.mark, position.to_i)
-    end until valid_play
+  def create_player(name, mark)
+    player = Player.new(name, mark)
+    key = players.empty? ? PLAYER1 : PLAYER2
+    players[key] = player
+  end
 
+  def choose_who_starts()
+    random_picked_player = @players.keys.sample 
+    @current_player = @players[random_picked_player]
+    @other_player = random_picked_player == PLAYER1 ? @players[PLAYER2] : @players[PLAYER1]
+  end
 
-    board.draw_board
+  def start_greetings()
+    puts OUTPUT_MSGS[:init_play_greet]
+    puts OUTPUT_MSGS[:how_to_play_tip]
+    @board.draw_board(true)
+  end
 
-    if board.verify_win(current_player.mark)
-      puts current_player.name + " Wins!!!"
-      puts other_player.name + ", sorry mate..."
-      check_exit(QUIT_COMMAND)
-    elsif board.verify_draw(current_player.mark, other_player.mark)
-      puts 'Dudes... you both suck...'
+  def get_position()
+    puts @current_player.name + OUTPUT_MSGS[:player_turn]
+    position = gets.chomp.tr(" \t\n", '')
+  end
+
+  def verify_win()
+    if @board.verify_win(@current_player.mark)
+      puts @current_player.name + OUTPUT_MSGS[:win_msg]
+      puts @other_player.name + OUTPUT_MSGS[:lose_msg]
       check_exit(QUIT_COMMAND)
     end
-
-    current_player, other_player = other_player, current_player
   end
+
+  def verify_draw
+    if @board.verify_draw(@current_player.mark, @other_player.mark)
+      puts OUTPUT_MSGS[:draw_msg]
+      check_exit(QUIT_COMMAND)
+    end
+  end
+end
+
+#MAIN
+if __FILE__ == $0
+  game = TicTacToe.new
+  game.setup_game()
+  game.play_game()
 end
