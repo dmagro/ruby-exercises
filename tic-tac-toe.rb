@@ -46,7 +46,6 @@ class Board
         values << MAGIC_VALUES[x][y] unless @board[x][y] != player_mark
       end
     end
-
     values
   end
 
@@ -84,7 +83,6 @@ class Board
     if valid_play
       @board[x][y] = player_mark
     end
-
     valid_play
   end
 
