@@ -101,7 +101,6 @@ class Board
   def draw_board(example=false)
     values = @board
     values = EXAMPLE_VALUES unless not example
-
     values.each_with_index do |row, i|
       draw_divisor unless i==0
       row.each_with_index do |element, j|
