@@ -1,14 +1,11 @@
-class Hangman
+require 'yaml'
 
-  MIN_LEN = 5
-  MAX_LEN = 12
-  FAILS_LIMIT = 6
-  EMPTY_CHAR = "_"
-  OUTPUT_MSGS = { 
+OUTPUT_MSGS = { 
     ask_for_letter: "Give me a letter:",
     used_letter: "You've already played that...",
-    ask_for_file: "There is no such file. Do you know where is the dictionary?",
     file_not_found: "Nope, file also not found. Exiting...",
+    dict_not_found: "Dictionary not found...",
+    game_not_found: "Game file not found...", 
     no_dict: "No dictionary available. Exiting...",
     win_msg: "Wow you win! You know a word...",
     lose_msg: "You lose, sorry mate...",
@@ -16,95 +13,25 @@ class Hangman
     load_msg: "Game loaded...",
     ask_file_path: "Please insert file location...",
     quit_msg: "Bye bye...",
-    bad_input: "I have no idea what to do with that."
+    bad_input: "I have no idea what to do with that.",
+    ask_overwrite: "File already exists... Do you want to overwrite it?(Y/n)",
+    overwrite_msg: "Overwriting file..."
   }
 
-  COMMANDS = {
-    letter: "letter",
-    save: "save",
-    load: "load",
-    quit: "quit"
-  }
+class Hangman
+  FAILS_LIMIT = 6
+  EMPTY_CHAR = "_"
 
-  attr_reader :dictionary, :secret_word, :letters_guessed, :played_letters
-  attr_accessor :dictionary_path
+  attr_reader :dictionary, :secret_word
+  attr_accessor :guessed_letters, :played_letters
 
-  def initialize(dictionary_path)
-    @dictionary_path = dictionary_path
-    load_dictionary()
+  def initialize(dictionary)
+    @dictionary = dictionary
     game_reset()
   end
   
   public
-  def play_game()
-    while not game_over?()
-
-      display_state()
-      puts OUTPUT_MSGS[:ask_for_letter]
-      command = gets.chomp.tr(" \t\n", '').downcase
-
-      case command
-      when is_letter(command)
-        if @played_letters.include?(command)
-          puts OUTPUT_MSGS[:used_letter]
-          next
-        else 
-          @played_letters << command
-          validate_play(command)
-        end
-      when COMMANDS[:save]
-        filename = ask_for_file()
-        save_game(filename)
-      when COMMANDS[:load]
-        filename = ask_for_file()
-        load_game(filename)
-      when COMMANDS[:quit]
-        puts OUTPUT_MSGS[:quit_msg]
-        Process.exit
-      else
-        puts OUTPUT_MSGS[:bad_input]
-      end
-    end
-  end
-
-  private
-  #INPUT METHODS
-  def ask_for_file(is_dict=false)
-    puts is_dict ? OUTPUT_MSGS[:ask_for_file] : OUTPUT_MSGS[:ask_file_path]
-    file_path = gets.chomp.tr(" \t\n", '')
-  end
-
-  def is_letter(letter)
-    if letter.length == 1 && letter.between?('a','z')
-      return letter
-    else #hack to pass switch by...
-      return false 
-    end
-  end
-
   #SECRET WORD METHODS
-  def valid_word?(word)
-    word.length.between?(MIN_LEN, MAX_LEN)
-  end
-
-  def load_dictionary()
-    @dictionary = {}
-    begin
-      filename = File.open(@dictionary_path, "r")
-      filename.readlines.inject(@dictionary){ |hash,line| word = line.chomp.downcase; hash[word.to_sym] = word if valid_word?(word); hash}
-      filename.close
-    rescue Errno::ENOENT
-      file_path = ask_for_file(true)
-      if File.exists? file_path
-        @dictionary_path = file_path
-        retry
-      else
-        puts OUTPUT_MSGS[:file_not_found]
-        Process.exit
-      end
-    end
-  end
-
   def choose_word()
     if @dictionary.empty?
       puts OUTPUT_MSGS[no_dict]
@@ -121,13 +48,17 @@ class Hangman
   end
 
   def reset_guessed_letters()
-    @letters_guessed = @secret_word.gsub(/[a-z]/, EMPTY_CHAR).scan(/./)
+    @guessed_letters = @secret_word.gsub(/[a-z]/, EMPTY_CHAR).scan(/./)
   end
 
   def insert_letter(letter, positions)
     positions.each do |idx|
-      @letters_guessed[idx] = letter
+      @guessed_letters[idx] = letter
     end
+  end
+
+  def insert_played_letter(letter)
+    @played_letters << letter
   end
 
   def validate_play(letter)
@@ -141,7 +72,7 @@ class Hangman
 
   def display_state
     puts ""
-    puts "\t #{@letters_guessed.join(" ")} \t Fails: #{@guess_fails.to_s}"
+    puts "\t #{@guessed_letters.join(" ")} \t Fails: #{@guess_fails.to_s}"
   end
 
   #GAME STATE METHODS
@@ -153,7 +84,7 @@ class Hangman
   end
 
   def player_wins?()
-    (not @letters_guessed.empty?) && (not @letters_guessed.include?(EMPTY_CHAR))  
+    (not @guessed_letters.empty?) && (not @guessed_letters.include?(EMPTY_CHAR))  
   end
 
   def player_loses?()
@@ -172,19 +103,135 @@ class Hangman
     end
   end
 
+  def self.deserialize(yaml_string)
+    YAML::load(yaml_string)
+  end
+  
+  def serialize
+    YAML::dump(self)
+  end
+end
+
+class Game
+  MIN_LEN = 5
+  MAX_LEN = 12
+  AFFIRMATIVE_CHAR = "y"
+  
+  COMMANDS = {
+    letter: "letter",
+    save: "save",
+    load: "load",
+    quit: "quit"
+  }
+
+  attr_reader :hangman
+  def initialize(dictionary_path)
+    @hangman = Hangman.new(load_dictionary(dictionary_path))
+  end
+
+  private
+  def ask_for_file()
+    puts OUTPUT_MSGS[:ask_file_path]
+    file_path = gets.chomp.tr(" \t\n", '')
+  end
+
+  def is_letter(letter)
+    if letter.length == 1 && letter.between?('a','z')
+      return letter
+    else #hack to pass switch by...
+      return false 
+    end
+  end
+
+  def read_file(filename, is_dictionary_context=false)
+    begin
+      return File.open(filename, "r")
+    rescue Errno::ENOENT
+      puts is_dictionary_context ? OUTPUT_MSGS[:dict_not_found] : OUTPUT_MSGS[:game_not_found]
+      file_path = ask_for_file()
+      if File.exists? file_path
+        filename = file_path
+        retry
+      else
+        puts OUTPUT_MSGS[:file_not_found]
+        Process.exit
+      end
+    end
+  end
+
+  def valid_word?(word)
+    word.length.between?(MIN_LEN, MAX_LEN)
+  end
+
+  def load_dictionary(dictionary_path)
+    dictionary = {}
+    file = read_file(dictionary_path, true)
+    file.readlines.inject(dictionary){ |hash,line| word = line.chomp.downcase; hash[word.to_sym] = word if valid_word?(word); hash}
+    file.close
+    dictionary
+  end
+
+  def overwrite?()
+    overwriting=false
+    puts OUTPUT_MSGS[:ask_overwrite]
+    answer = gets.chomp.tr(" \t\n", '').downcase
+    return overwriting if answer != AFFIRMATIVE_CHAR
+    puts OUTPUT_MSGS[:overwrite_msg]
+    overwriting = true
+  end
+
   def save_game(filename)
-    #SAVES THE CURRENT GAME STATE
+    if File.exists? filename
+      return false if not overwrite?
+    end
+
+    File.open(filename, "w") do |file|
+      yaml_saved_game = @hangman.serialize()
+      file.puts(yaml_saved_game)
+    end
     puts OUTPUT_MSGS[:save_msg]
   end
 
   def load_game(filename)
-    #LOADS THE SAVED GAME STATE
+    yaml_string = read_file(filename).read
+    @hangman = Hangman.deserialize(yaml_string)
     puts OUTPUT_MSGS[:load_msg]
+  end 
+
+  public
+  def play_game()
+    while not @hangman.game_over?()
+      @hangman.display_state()
+      puts OUTPUT_MSGS[:ask_for_letter]
+      command = gets.chomp.tr(" \t\n", '').downcase
+
+      case command
+      when is_letter(command)
+        if @hangman.played_letters.include?(command)
+          puts OUTPUT_MSGS[:used_letter]
+          next
+        else 
+          @hangman.insert_played_letter(command)
+          @hangman.validate_play(command)
+        end
+      when COMMANDS[:save]
+        filename = ask_for_file()
+        save_game(filename)
+      when COMMANDS[:load]
+        filename = ask_for_file()
+        load_game(filename)
+      when COMMANDS[:quit]
+        puts OUTPUT_MSGS[:quit_msg]
+        Process.exit
+      else
+        puts OUTPUT_MSGS[:bad_input]
+      end
+    end
   end
 end
 
 #MAIN
 if __FILE__ == $0
-  game = Hangman.new("5desk.txt")
+  game = Game.new("5desk.txt")
   game.play_game()
 end
