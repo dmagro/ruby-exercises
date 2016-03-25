@@ -1,4 +1,6 @@
 require 'jumpstart_auth'
+require 'bitly'
+
 
 class MicroBlogger
   MSG_LEN_LIM = 140
@@ -7,6 +9,8 @@ class MicroBlogger
   def initialize
     puts "Initializing MicroBlogger"
     @client = JumpstartAuth.twitter
+    Bitly.use_api_version_3
+    @bitly = Bitly.new('hungryacademy', 'R_430e9f62250186d2612cca76eee2dbc6')
   end
 
   def tweet(message)
@@ -52,6 +56,9 @@ class MicroBlogger
     end
   end
 
+  def shorten(original_url)
+    @bitly.shorten(original_url).short_url
+  end
 
   def run
     puts "Welcome to the JSL Twitter Client!"
@@ -68,6 +75,8 @@ class MicroBlogger
       when 'dm' then dm(parts[1], parts[2..-1].join(" "))
       when 'spam' then spam_my_followers(parts[1..-1].join(" "))
       when 'elt' then everyones_last_tweet
+      when 's' then shorten(parts[0])
+      when 'turl' then tweet(parts[1..-2].join(" ") + " " + shorten(parts[-1]))
       else
         puts "Sorry, I don't know how to #{command}"
       end
