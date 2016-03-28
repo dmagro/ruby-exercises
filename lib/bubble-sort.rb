@@ -35,7 +35,7 @@ if __FILE__ == $0
     #puts
     #print bubble_sort([4,3,-12,2,0,-21])
     #puts
-    result =  bubble_sort_by(["hi","hello","hey"]) do |left,right|
+    result = bubble_sort_by(["hi","hello","hey"]) do |left,right|
         left <=> right
     end
 
