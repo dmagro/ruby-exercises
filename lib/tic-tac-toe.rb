@@ -22,6 +22,8 @@ class Board
   EXAMPLE_VALUES = [['1','2','3'],['4','5','6'],['7','8','9']]
   EMPTY_CELL_MARK = ''
 
+  attr_reader :board
+
   def initialize
     @board = reset_board
   end
